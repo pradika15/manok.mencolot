@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<style>
+canvas {
+    display: block;
+    background-color: #87CEEB; /* langit biru cadangan */
+}
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Consolas, sans-serif;
+}
+
+/* Game Over Screen */
+#gameOverScreen {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+
+    background: rgba(255, 255, 255, 0.85);
+    padding: 5vh 8vw;
+    border-radius: 2vh;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+#gameOverScreen h1 {
+    font-size: 6vw;
+    color: red;
+    margin: 0 0 2vh 0;
+    line-height: 1.2;
+    text-align: center;
+    font-weight: bold; /* tebal */
+}
+#finalScore {
+    font-size: 4.5vw;
+    color: red;
+    margin-bottom: 3vh;
+    line-height: 1.2;
+    text-align: center;
+    font-weight: bold; /* tebal */
+}
+#restartBtn {
+    padding: 2vh 4vw;
+    font-size: 4vw;
+    border: none;
+    border-radius: 1vh;
+    background: #45a049;
+    color: white;
+    cursor: pointer;
+}
+#restartBtn:hover {
+    background: #3c8f41;
+}
+</style>
+</head>
+<body onload="startGame()">
+
+<div id="gameOverScreen">
+    <h1>MANOK NABRAK</h1>
+    <div id="finalScore">SCORE: 0</div>
+    <button id="restartBtn" onclick="restartGame()">BALENI</button>
+</div>
+
+<script>
+var myGamePiece;
+var myObstacles = [];
+var myScore;
+var background;
+var gameOver = false;
+var animationId;
+
+function startGame() {
+    background = new component(window.innerWidth, window.innerHeight, "bg2.png", 0, 0, "background");
+    myGamePiece = new component(window.innerWidth * 0.08, window.innerWidth * 0.08, "manok2.png", 50, window.innerHeight / 2, "image");
+    myGamePiece.gravity = 0.5;
+    myScore = new component("4vw", "Consolas", "black", window.innerWidth * 0.7, 40, "text");
+    myGameArea.start();
+}
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.frameNo = 0;
+        gameOver = false;
+        document.getElementById("gameOverScreen").style.display = "none";
+        myObstacles = [];
+
+        window.addEventListener("resize", () => {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+        });
+
+        window.addEventListener("mousedown", jump);
+        window.addEventListener("touchstart", e => {
+            e.preventDefault();
+            jump();
+        }, { passive: false });
+
+        window.addEventListener("keydown", function(e) {
+            if (e.code === "Space" || e.code === "ArrowUp") {
+                jump();
+            }
+        });
+
+        this.updateGameArea();
+    },
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+    stop : function() {
+        cancelAnimationFrame(animationId);
+    },
+    updateGameArea : function() {
+        if (gameOver) return;
+
+        for (let i = 0; i < myObstacles.length; i++) {
+            if (myGamePiece.crashWith(myObstacles[i])) {
+                endGame();
+                return;
+            }
+        }
+
+        this.clear();
+        background.newPos();
+        background.update();
+
+        this.frameNo += 1;
+
+        if (this.frameNo == 1 || everyinterval(150)) {
+            let x = this.canvas.width;
+            let minHeight = this.canvas.height * 0.1;
+            let maxHeight = this.canvas.height * 0.5;
+            let height = Math.floor(Math.random() * (maxHeight - minHeight + 1) + minHeight);
+
+            let minGap = this.canvas.height * 0.2;
+            let maxGap = this.canvas.height * 0.35;
+            let gap = Math.floor(Math.random() * (maxGap - minGap + 1) + minGap);
+
+            myObstacles.push(new component(this.canvas.width * 0.15, height, "kayu2.png", x, 0, "pipe"));
+            myObstacles.push(new component(this.canvas.width * 0.15, this.canvas.height - height - gap, "kayu.png", x, height + gap, "pipe"));
+        }
+
+        for (let i = 0; i < myObstacles.length; i++) {
+            myObstacles[i].newPos();
+            myObstacles[i].update();
+        }
+
+        myScore.text = "SCORE: " + this.frameNo;
+        myScore.update();
+
+        myGamePiece.newPos();
+        myGamePiece.update();
+
+        animationId = requestAnimationFrame(this.updateGameArea.bind(this));
+    }
+};
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    if (type === "image" || type === "background" || type === "pipe") {
+        this.image = new Image();
+        this.image.src = color;
+    }
+    this.width = width;
+    this.height = height;
+    this.x = x;
+    this.y = y;
+    this.speedX = -2.5;
+    this.gravity = 0;
+    this.gravitySpeed = 0;
+
+    this.update = function() {
+        let ctx = myGameArea.context;
+        if (this.type === "text") {
+            ctx.font = this.width + " " + this.height;
+            ctx.fillStyle = color;
+            ctx.fillText(this.text, this.x, this.y);
+        } else if (this.type === "image" || this.type === "background" || this.type === "pipe") {
+            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+            if (this.type === "background") {
+                ctx.drawImage(this.image, this.x + this.width, this.y, this.width, this.height);
+            }
+        } else {
+            ctx.fillStyle = color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    };
+
+    this.newPos = function() {
+        if (this.type === "background") {
+            this.x += this.speedX;
+            if (this.x <= -this.width) {
+                this.x = 0;
+            }
+        } else if (this.type === "pipe") {
+            this.x += this.speedX;
+        } else {
+            this.gravitySpeed += this.gravity;
+            this.y += this.gravitySpeed;
+            this.hitBottom();
+            this.hitTop();
+        }
+    };
+
+    this.hitBottom = function() {
+        var rockbottom = myGameArea.canvas.height - this.height;
+        if (this.y > rockbottom) {
+            this.y = rockbottom;
+            this.gravitySpeed = 0;
+        }
+    };
+    this.hitTop = function() {
+        if (this.y < 0) {
+            this.y = 0;
+            this.gravitySpeed = 0;
+        }
+    };
+    this.crashWith = function(otherobj) {
+        var myleft = this.x;
+        var myright = this.x + (this.width);
+        var mytop = this.y;
+        var mybottom = this.y + (this.height);
+        var otherleft = otherobj.x;
+        var otherright = otherobj.x + (otherobj.width);
+        var othertop = otherobj.y;
+        var otherbottom = otherobj.y + (otherobj.height);
+        var crash = true;
+        if ((mybottom < othertop) || (mytop > otherbottom) ||
+            (myright < otherleft) || (myleft > otherright)) {
+            crash = false;
+        }
+        return crash;
+    };
+}
+
+function jump() {
+    if (!gameOver) {
+        myGamePiece.gravitySpeed = -7;
+    }
+}
+
+function everyinterval(n) {
+    return (myGameArea.frameNo / n) % 1 === 0;
+}
+
+function endGame() {
+    gameOver = true;
+    myGameArea.stop();
+    document.getElementById("finalScore").innerText = "SCORE: " + myGameArea.frameNo;
+    document.getElementById("gameOverScreen").style.display = "flex";
+}
+
+function restartGame() {
+    myGameArea.stop();
+    myObstacles = [];
+    document.body.removeChild(myGameArea.canvas);
+    startGame();
+}
+</script>
+</body>
+</html>
